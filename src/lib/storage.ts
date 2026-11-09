@@ -30,11 +30,16 @@ export function isAttempt(a: unknown): a is Attempt {
     typeof x.t === 'number' &&
     Number.isFinite(x.t) &&
     typeof x.ok === 'boolean' &&
-    (x.g == null || (typeof x.g === 'number' && Number.isFinite(x.g)))
+    (x.g == null || (typeof x.g === 'number' && Number.isFinite(x.g))) &&
+    (x.c == null || (typeof x.c === 'number' && Number.isFinite(x.c)))
   )
 }
 
-const clean = (a: Attempt): Attempt => ({ id: a.id, t: a.t, ok: a.ok, g: a.g ?? null })
+const clean = (a: Attempt): Attempt => {
+  const out: Attempt = { id: a.id, t: a.t, ok: a.ok, g: a.g ?? null }
+  if (typeof a.c === 'number') out.c = a.c
+  return out
+}
 
 export function loadAttempts(): Attempt[] {
   const s = read<{ a?: unknown }>(K_DATA, {})
@@ -44,10 +49,12 @@ export function loadAttempts(): Attempt[] {
 export const saveAttempts = (a: Attempt[]) => write(K_DATA, { a })
 
 export function loadPrefs(): Prefs {
-  const p = { timbre: 'piano', oct: 4, range: 'day', ...read<Partial<Prefs>>(K_PREFS, {}) } as Prefs
+  const p = { timbre: 'piano', oct: 4, range: 'day', metric: 'rate', tol: 50, ...read<Partial<Prefs>>(K_PREFS, {}) } as Prefs
   if (!OCT[p.oct]) p.oct = 4
   if (!['piano', 'fork', 'organ'].includes(p.timbre)) p.timbre = 'piano'
   if (p.range !== 'day' && p.range !== 'week') p.range = 'day'
+  if (p.metric !== 'rate' && p.metric !== 'cents') p.metric = 'rate'
+  if (p.tol !== 25 && p.tol !== 50) p.tol = 50
   return p
 }
 

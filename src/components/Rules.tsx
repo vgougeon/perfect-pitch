@@ -21,6 +21,11 @@ export function Rules() {
         progresser. Le tout est multiplié par la fraîcheur. Le meilleur test reste le Do du matin, avant d’avoir entendu la moindre
         note.
       </p>
+      <p className="max-w-[72ch] text-[14.5px] text-ink-2">
+        Au micro, le verdict est automatique : juste si tu es à moins de 50 cents du Do (25 en mode strict). Un cent vaut un
+        centième de demi-ton, et l’octave ne compte pas. Le graphique « Écart en cents » montre ta précision moyenne, même quand tu
+        trouves déjà la bonne note.
+      </p>
       <p className="max-w-[72ch] text-[13px] text-muted">
         Do central = C4 en notation internationale, do3 en notation française. Accordage La 440 Hz. Le Do grave sonne une octave plus
         bas (130,81 Hz), le Do aigu une octave plus haut (523,25 Hz).

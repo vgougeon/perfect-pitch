@@ -1,9 +1,13 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, type CSSProperties } from 'react'
 import { HOUR, OCT, OCTAVES, TIERS, TIMBRES, tierIdx } from '../lib/constants'
-import { fmtDur, fmtMult } from '../lib/format'
-import type { Octave, Phase, Prefs, Result } from '../lib/types'
+import { fmtDur, fmtMult, pl } from '../lib/format'
+import { nearestNote } from '../lib/pitch'
+import type { Octave, Phase, Prefs, Result, Tolerance } from '../lib/types'
+import { Gauge } from './Gauge'
 import { Scope } from './Scope'
 import { Segmented } from './Segmented'
+
+export type ListenUi = { level: number; progress: number }
 
 type Props = {
   phase: Phase
@@ -11,7 +15,11 @@ type Props = {
   gap: number | null
   result: Result | null
   playToken: number
+  micOk: boolean
+  listenUi: ListenUi | null
   onReveal: () => void
+  onListen: () => void
+  onCancelListen: () => void
   onAnswer: (ok: boolean) => void
   onAgain: () => void
   onUndo: () => void
@@ -25,25 +33,27 @@ const STEPS: [Phase, string][] = [
   ['done', 'Résultat'],
 ]
 
-const PROMPTS: Record<Exclude<Phase, 'done'>, string> = {
+const PROMPTS: Record<'imagine' | 'judge', string> = {
   imagine: 'Avant d’écouter quoi que ce soit, chante ou imagine ton Do. Tiens-le quelques secondes, puis révèle.',
   judge: 'Voici le vrai Do. Était-il au même endroit que le tien ?',
 }
 
 export function Stage(p: Props) {
-  const { phase, prefs, gap, result, playToken } = p
+  const { phase, prefs, gap, result, playToken, listenUi } = p
   const yesRef = useRef<HTMLButtonElement>(null)
   const againRef = useRef<HTMLButtonElement>(null)
   const revealRef = useRef<HTMLButtonElement>(null)
+  const cancelRef = useRef<HTMLButtonElement>(null)
   const first = useRef(true)
   const ti = tierIdx(gap)
+  const revealed = phase === 'judge' || phase === 'done'
 
   useEffect(() => {
     if (first.current) {
       first.current = false
       return
     }
-    const target = phase === 'judge' ? yesRef : phase === 'done' ? againRef : revealRef
+    const target = { imagine: revealRef, listen: cancelRef, judge: yesRef, done: againRef }[phase]
     target.current?.focus({ preventScroll: true })
   }, [phase])
 
@@ -56,7 +66,7 @@ export function Stage(p: Props) {
       <div className="flex w-full flex-wrap items-center justify-between gap-x-4 gap-y-2.5">
         <ol className="flex gap-1 text-[13px] font-semibold" aria-label="Étapes">
           {STEPS.map(([k, label], i) => {
-            const cur = phase === k
+            const cur = phase === k || (k === 'imagine' && phase === 'listen')
             return (
               <li
                 key={k}
@@ -75,10 +85,10 @@ export function Stage(p: Props) {
       <div className="relative grid w-full place-items-center pt-[22px] pb-1.5">
         <div className="staff" aria-hidden="true" />
         <div className="orb" aria-hidden="true">
-          <span
-            key={phase === 'imagine' ? 'breathe' : `ping-${playToken}`}
-            className={`rings ${phase === 'imagine' ? 'breathe' : 'ping'}`}
-          >
+          {phase === 'listen' && (
+            <span className="hold" style={{ '--p': listenUi?.progress ?? 0 } as CSSProperties} />
+          )}
+          <span key={revealed ? `ping-${playToken}` : 'breathe'} className={`rings ${revealed ? 'ping' : 'breathe'}`}>
             <i />
             <i />
             <i />
@@ -93,7 +103,7 @@ export function Stage(p: Props) {
         <span>{OCT[prefs.oct].hz}</span>
       </div>
 
-      {phase !== 'done' && (
+      {(phase === 'imagine' || phase === 'judge') && (
         <p className="max-w-[46ch] text-center text-[17px] text-balance text-ink-2" aria-live="polite">
           {PROMPTS[phase]}
         </p>
@@ -105,15 +115,47 @@ export function Stage(p: Props) {
         </p>
       )}
 
-      {phase !== 'imagine' && <Scope playToken={playToken} />}
-
       {phase === 'imagine' && (
-        <button ref={revealRef} type="button" className="btn btn-primary" onClick={p.onReveal}>
-          J’ai mon Do, révéler <kbd>Espace</kbd>
-        </button>
+        <div className="flex flex-wrap items-center justify-center gap-3">
+          {p.micOk && (
+            <button type="button" className="btn btn-primary" onClick={p.onListen}>
+              <MicIcon />
+              Chanter mon Do <kbd>C</kbd>
+            </button>
+          )}
+          <button ref={revealRef} type="button" className={p.micOk ? 'btn !py-[15px]' : 'btn btn-primary'} onClick={p.onReveal}>
+            {p.micOk ? 'Je l’imagine, révéler' : 'J’ai mon Do, révéler'} <kbd>Espace</kbd>
+          </button>
+        </div>
       )}
 
-      {phase !== 'imagine' && (
+      {phase === 'listen' && (
+        <div className="flex w-full flex-col items-center gap-3.5" aria-live="polite">
+          <p className="max-w-[46ch] text-center text-[17px] text-balance text-ink-2">
+            {listenUi && listenUi.progress > 0
+              ? 'Tiens la note…'
+              : listenUi && listenUi.level > 0.08
+                ? 'Je t’entends. Tiens une note bien stable.'
+                : 'Chante ton Do et tiens-le environ 2 secondes.'}
+          </p>
+          <div className="flex items-center gap-2.5 text-[13px] text-muted">
+            <MicIcon />
+            <span className="h-1.5 w-40 overflow-hidden rounded-full bg-line">
+              <span className="block h-full rounded-full bg-good transition-[width] duration-75" style={{ width: `${Math.round((listenUi?.level ?? 0) * 100)}%` }} />
+            </span>
+          </div>
+          <p className="max-w-[52ch] text-center text-[13px] text-balance text-muted">
+            La note n’est pas affichée pendant que tu chantes, pour que tu ne puisses pas la corriger.
+          </p>
+          <button ref={cancelRef} type="button" className="btn" onClick={p.onCancelListen}>
+            Annuler <kbd>Échap</kbd>
+          </button>
+        </div>
+      )}
+
+      {revealed && <Scope playToken={playToken} />}
+
+      {revealed && (
         <div className="flex flex-wrap items-center justify-center gap-2">
           <button type="button" className="btn" onClick={() => p.onPlay(prefs.oct)}>
             <SpeakerIcon />
@@ -148,10 +190,11 @@ export function Stage(p: Props) {
       )}
 
       {phase === 'done' && result && (
-        <div className="grid justify-items-center gap-1.5 text-center" aria-live="polite">
+        <div className="grid w-full justify-items-center gap-1.5 text-center" aria-live="polite">
           <p className={`font-display text-[34px] leading-tight font-bold italic ${result.ok ? 'text-good-text' : 'text-ink-2'}`}>
             {result.ok ? 'Juste !' : 'À côté'}
           </p>
+          {result.cents != null && <SungLine cents={result.cents} tol={prefs.tol} />}
           <div className="flex flex-wrap items-center justify-center gap-2.5">
             <span key={result.id} className="gain-pop text-xl font-bold text-gold-ink">
               +{result.gain} XP
@@ -164,7 +207,7 @@ export function Stage(p: Props) {
               Nouvel essai <kbd>Espace</kbd>
             </button>
             <button type="button" className="linkbtn" onClick={p.onUndo}>
-              Annuler ma réponse
+              {result.cents != null ? 'Ne pas compter cet essai' : 'Annuler ma réponse'}
             </button>
           </div>
         </div>
@@ -188,8 +231,49 @@ export function Stage(p: Props) {
             onChange={(oct) => p.onPrefs({ oct })}
           />
         </div>
+        {p.micOk && (
+          <div className="flex flex-wrap items-center justify-center gap-2.5">
+            <span id="lbl-tol" className="caps">
+              Tolérance micro
+            </span>
+            <Segmented
+              labelledBy="lbl-tol"
+              options={[
+                { value: 50 as Tolerance, label: '±50 cents' },
+                { value: 25 as Tolerance, label: '±25 cents' },
+              ]}
+              value={prefs.tol}
+              onChange={(tol) => p.onPrefs({ tol })}
+            />
+          </div>
+        )}
       </div>
     </section>
+  )
+}
+
+function SungLine({ cents, tol }: { cents: number; tol: number }) {
+  const n = nearestNote(cents)
+  const c = Math.round(cents)
+  const sign = (v: number) => (v > 0 ? '+' : v < 0 ? '−' : '±')
+  return (
+    <div className="grid w-full justify-items-center gap-1 pb-1">
+      <p className="text-[15px] text-ink-2">
+        Tu as chanté <b className="text-ink">{n.name}</b> {sign(n.dev)}
+        {Math.abs(n.dev)} cents
+        {n.semis !== 0 && (
+          <>
+            {' '}
+            · {Math.abs(n.semis)} {pl(Math.abs(n.semis), 'demi-ton', 'demi-tons')} {n.semis > 0 ? 'au-dessus' : 'en dessous'} du Do
+          </>
+        )}
+      </p>
+      <Gauge cents={cents} tol={tol} />
+      <p className="font-mono text-xs text-muted">
+        {sign(c)}
+        {Math.abs(c)} cents du Do · zone juste ±{tol}
+      </p>
+    </div>
   )
 }
 
@@ -227,6 +311,15 @@ function nextHint(gap: number | null, ok: boolean): string {
     parts.push('Ta mémoire est vierge, ton prochain essai vaut ×2.')
   }
   return `${lead}Laisse le Do s’effacer avant de revenir. ${parts.join(' ')}`
+}
+
+function MicIcon() {
+  return (
+    <svg viewBox="0 0 20 20" aria-hidden="true" className="size-[18px] flex-none">
+      <rect x="7" y="2.5" width="6" height="10" rx="3" fill="currentColor" />
+      <path d="M4.5 9.5a5.5 5.5 0 0 0 11 0M10 15v2.5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    </svg>
+  )
 }
 
 function SpeakerIcon() {

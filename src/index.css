@@ -241,6 +241,16 @@
   [data-phase="judge"] .orb-do,
   [data-phase="done"] .orb-do { color: var(--on-accent); -webkit-text-stroke: 0 transparent; }
 
+  /* Anneau de tenue pendant l'écoute au micro */
+  .hold {
+    position: absolute;
+    inset: -12px;
+    border-radius: 50%;
+    background: conic-gradient(var(--accent) calc(var(--p) * 1turn), var(--line) 0);
+    -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 5px), #000 calc(100% - 4px));
+    mask: radial-gradient(farthest-side, transparent calc(100% - 5px), #000 calc(100% - 4px));
+  }
+
   .rings { position: absolute; inset: 0; pointer-events: none; }
   .rings i {
     position: absolute;

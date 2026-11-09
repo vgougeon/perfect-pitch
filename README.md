@@ -6,6 +6,8 @@ Petit jeu pour apprendre à retrouver le **Do** de mémoire (oreille absolue sur
 2. Tu révèles le vrai Do (piano, diapason ou orgue ; grave, central ou aigu).
 3. Tu dis honnêtement si tu avais juste.
 
+**Mode micro** : au lieu de te noter toi-même, tu chantes ton Do et le site mesure ta note (algorithme YIN, tout se fait dans le navigateur). Verdict automatique à ±50 cents (ou ±25 en mode strict), et suivi de ton écart moyen en cents. La note n'est jamais affichée pendant que tu chantes.
+
 Le site compte l'XP, les niveaux, les combos, la série de jours et les médailles, et trace ton taux de réussite par jour et par semaine. Plus le dernier Do entendu est ancien, plus l'essai rapporte (fraîcheur ×0,5 à ×2).
 
 L'historique est gardé dans le `localStorage` du navigateur. Les boutons **Exporter / Importer** permettent de le sauvegarder ou de le passer sur un autre appareil.
